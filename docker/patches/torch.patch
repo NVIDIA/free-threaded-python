@@ -1,0 +1,675 @@
+# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: MIT
+#
+# Permission is hereby granted, free of charge, to any person obtaining a
+# copy of this software and associated documentation files (the "Software"),
+# to deal in the Software without restriction, including without limitation
+# the rights to use, copy, modify, merge, publish, distribute, sublicense,
+# and/or sell copies of the Software, and to permit persons to whom the
+# Software is furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+# THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+# FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+# DEALINGS IN THE SOFTWARE.
+
+diff --git a/torch/csrc/Storage.cpp b/torch/csrc/Storage.cpp
+index a3f82633037..0c3a8b03435 100644
+--- a/torch/csrc/Storage.cpp
++++ b/torch/csrc/Storage.cpp
+@@ -214,7 +214,7 @@ static void THPStorage_subclass_dealloc(PyObject* self) {
+     PyObject_GC_UnTrack(self);
+   }
+ 
+-  bool has_finalizer = type->tp_finalize || type->tp_del;
++  // bool has_finalizer = type->tp_finalize || type->tp_del;
+ 
+   if (type->tp_finalize) {
+     PyObject_GC_Track(self);
+@@ -236,13 +236,14 @@ static void THPStorage_subclass_dealloc(PyObject* self) {
+   if (type->tp_del) {
+     PyObject_GC_Track(self);
+     type->tp_del(self);
+-    if (self->ob_refcnt > 0) {
++    if (Py_REFCNT(self) > 0) {
+       // Resurrected (see above comment about resurrection from `__del__`)
+       return;
+     }
+     PyObject_GC_UnTrack(self);
+   }
+ 
++#if 0 // there's a risk of missing weak refs but _PyWeakref_ClearRef was moved to internal API so this doesn't compile anymore
+   if (has_finalizer) {
+     /* New weakrefs could be created during the finalizer call.
+        If this occurs, clear them out without calling their
+@@ -256,6 +257,7 @@ static void THPStorage_subclass_dealloc(PyObject* self) {
+         _PyWeakref_ClearRef(*list);
+     }
+   }
++#endif
+ 
+   // Clear slots
+   {
+diff --git a/torch/csrc/autograd/python_function.cpp b/torch/csrc/autograd/python_function.cpp
+index 8f5297e87fe..1186bcc90f3 100644
+--- a/torch/csrc/autograd/python_function.cpp
++++ b/torch/csrc/autograd/python_function.cpp
+@@ -1,3 +1,4 @@
++#include <Python.h>
+ #include <torch/csrc/autograd/python_function.h>
+ 
+ #include <ATen/ATen.h>
+@@ -1017,12 +1018,14 @@ static void _trace_post_record(
+   }
+ 
+   node->i_(jit::attr::inplace, is_inplace);
+-  if (PyObject* module_name = PyDict_GetItemString(
+-          ((PyTypeObject*)op_obj)->tp_dict, "__module__")) {
++  PyObject *module_name = nullptr;
++  PyDict_GetItemStringRef(((PyTypeObject*)op_obj)->tp_dict, "__module__", &module_name);
++  if (module_name != nullptr) {
+     if (auto ptr = PyUnicode_AsUTF8(module_name)) {
+       node->s_(jit::attr::module, std::string(ptr));
+     }
+   }
++  Py_XDECREF(module_name);
+ 
+   // Isolate C variable ptrs in a vector
+   int num_outputs = PyTuple_GET_SIZE(output_objects);
+diff --git a/torch/csrc/autograd/python_hook.cpp b/torch/csrc/autograd/python_hook.cpp
+index c29e003a0b7..ba4099728c3 100644
+--- a/torch/csrc/autograd/python_hook.cpp
++++ b/torch/csrc/autograd/python_hook.cpp
+@@ -67,7 +67,7 @@ bool _call_hooks(PyObject* dict, PyObject* args) {
+   bool is_modified = false;
+   const auto len = PyList_Size(hooks);
+   for (Py_ssize_t idx = 0; idx < len; ++idx) {
+-    const auto hook = PyList_GetItem(hooks, idx);
++    const auto hook = PyList_GetItem(hooks, idx); // borrowed ref
+ 
+     THPObjectPtr res(PyObject_CallObject(hook, args));
+     if (!res)
+diff --git a/torch/csrc/autograd/python_variable.cpp b/torch/csrc/autograd/python_variable.cpp
+index 3705ac5e423..ae47fa5a689 100644
+--- a/torch/csrc/autograd/python_variable.cpp
++++ b/torch/csrc/autograd/python_variable.cpp
+@@ -1891,7 +1891,7 @@ void THPVariable_subclass_dealloc(PyObject* self) {
+   PyObject_GC_UnTrack(self);
+   // TODO: consider using trash can
+ 
+-  bool has_finalizer = type->tp_finalize || type->tp_del;
++  // bool has_finalizer = type->tp_finalize || type->tp_del;
+ 
+   if (type->tp_finalize) {
+     PyObject_GC_Track(self);
+@@ -1910,13 +1910,14 @@ void THPVariable_subclass_dealloc(PyObject* self) {
+   if (type->tp_del) {
+     PyObject_GC_Track(self);
+     type->tp_del(self);
+-    if (self->ob_refcnt > 0) {
++    if (Py_REFCNT(self) > 0) {
+       /* Resurrected */
+       return;
+     }
+     PyObject_GC_UnTrack(self);
+   }
+ 
++#if 0 // there's a risk of missing weak refs but _PyWeakref_ClearRef was moved to internal API so this doesn't compile anymore
+   if (has_finalizer) {
+     /* New weakrefs could be created during the finalizer call.
+        If this occurs, clear them out without calling their
+@@ -1930,6 +1931,7 @@ void THPVariable_subclass_dealloc(PyObject* self) {
+         _PyWeakref_ClearRef(*list);
+     }
+   }
++#endif
+ 
+   // Clear all slots until we get to base class THPVariableType
+   {
+diff --git a/torch/csrc/dynamo/cpython_defs.c b/torch/csrc/dynamo/cpython_defs.c
+index bf710b9ff7e..d740af81c86 100644
+--- a/torch/csrc/dynamo/cpython_defs.c
++++ b/torch/csrc/dynamo/cpython_defs.c
+@@ -25,17 +25,16 @@
+ #endif
+ 
+ #define Py_BUILD_CORE
+-#include <internal/pycore_pystate.h>
+-#define NEED_OPCODE_TABLES // To get _PyOpcode_Deopt, _PyOpcode_Caches
+-#include <internal/pycore_opcode.h>
++#define NEED_OPCODE_METADATA // To get _PyOpcode_Deopt, _PyOpcode_Caches
++#include <internal/pycore_opcode_metadata.h>
+ #undef NEED_OPCODE_TABLES
+ #undef Py_BUILD_CORE
+ #include <internal/pycore_frame.h>
+ 
+ // As a simple way to reduce the impact of ABI changes on the CPython side, this check forces
+ // us to manually re-check that the function didn't change on the next major version
+-#if PY_VERSION_HEX >= 0x030D0000 // 3.13
+-#error "Please ensure that the functions below still match the CPython implementation for 3.13"
++#if PY_VERSION_HEX >= 0x030E0000 // 3.14
++#error "Please ensure that the functions below still match the CPython implementation for 3.14"
+ #endif
+ 
+ // https://github.com/python/cpython/blob/a7715ccfba5b86ab09f86ec56ac3755c93b46b48/Objects/frameobject.c#L1079
+@@ -45,8 +44,8 @@ THP_PyFrame_OpAlreadyRan(_PyInterpreterFrame *frame, int opcode, int oparg)
+     // This only works when opcode is a non-quickened form:
+     CHECK(_PyOpcode_Deopt[opcode] == opcode);
+     int check_oparg = 0;
+-    for (_Py_CODEUNIT *instruction = _PyCode_CODE(frame->f_code);
+-         instruction < frame->prev_instr; instruction++)
++    for (_Py_CODEUNIT *instruction = _PyCode_CODE(_PyFrame_GetCode(frame));
++         instruction < frame->instr_ptr; instruction++)
+     {
+         int check_opcode = _PyOpcode_Deopt[_Py_OPCODE(*instruction)];
+         check_oparg |= _Py_OPARG(*instruction);
+@@ -75,7 +74,7 @@ frame_init_get_vars(_PyInterpreterFrame *frame, int *free_vars_copied)
+ {
+     // COPY_FREE_VARS has no quickened forms, so no need to use _PyOpcode_Deopt
+     // here:
+-    PyCodeObject *co = frame->f_code;
++    PyCodeObject *co = _PyFrame_GetCode(frame);
+     int lasti = _PyInterpreterFrame_LASTI(frame);
+     if (!(lasti < 0 && _PyCode_CODE(co)->op.code == COPY_FREE_VARS
+           && PyFunction_Check(frame->f_funcobj)))
+@@ -86,13 +85,13 @@ frame_init_get_vars(_PyInterpreterFrame *frame, int *free_vars_copied)
+ 
+     /* Free vars have not been initialized -- Do that */
+     PyObject *closure = ((PyFunctionObject *)frame->f_funcobj)->func_closure;
+-    int offset = PyCode_GetFirstFree(co);
++    int offset = PyUnstable_Code_GetFirstFree(co);
+     for (int i = 0; i < co->co_nfreevars; ++i) {
+         PyObject *o = PyTuple_GET_ITEM(closure, i);
+         frame->localsplus[offset + i] = Py_NewRef(o);
+     }
+     // COPY_FREE_VARS doesn't have inline CACHEs, either:
+-    frame->prev_instr = _PyCode_CODE(frame->f_code);
++    frame->instr_ptr = _PyCode_CODE(_PyFrame_GetCode(frame));
+ 
+     *free_vars_copied = 1;
+ }
+@@ -175,7 +174,7 @@ THP_PyFrame_GetLocals(_PyInterpreterFrame *frame, int include_hidden, int *free_
+ 
+     frame_init_get_vars(frame, free_vars_copied);
+ 
+-    PyCodeObject *co = frame->f_code;
++    PyCodeObject *co = _PyFrame_GetCode(frame);
+     for (int i = 0; i < co->co_nlocalsplus; i++) {
+         PyObject *value;  // borrowed reference
+         if (!frame_get_var(frame, co, i, &value)) {
+@@ -411,7 +410,7 @@ THP_PyFrame_New_NoTrack(const PyCodeObject *code)
+     f->f_trace = NULL;
+     f->f_trace_lines = 1;
+     f->f_trace_opcodes = 0;
+-    f->f_fast_as_locals = 0;
++    f->f_extra_locals = NULL;
+     f->f_lineno = 0;
+     return f;
+ }
+@@ -424,7 +423,7 @@ THP_PyFrame_MakeAndSetFrameObject(_PyInterpreterFrame *frame)
+     PyObject *error_type = NULL, *error_value = NULL, *error_traceback = NULL;
+     PyErr_Fetch(&error_type, &error_value, &error_traceback);
+ 
+-    PyFrameObject *f = THP_PyFrame_New_NoTrack(frame->f_code);
++    PyFrameObject *f = THP_PyFrame_New_NoTrack(_PyFrame_GetCode(frame));
+     if (f == NULL) {
+         Py_XDECREF(error_type);
+         Py_XDECREF(error_value);
+@@ -484,8 +483,8 @@ THP_take_ownership(PyFrameObject *f, _PyInterpreterFrame *frame)
+     if (_PyFrame_IsIncomplete(frame)) {
+         // This may be a newly-created generator or coroutine frame. Since it's
+         // dead anyways, just pretend that the first RESUME ran:
+-        PyCodeObject *code = frame->f_code;
+-        frame->prev_instr = _PyCode_CODE(code) + code->_co_firsttraceable;
++        PyCodeObject *code = _PyFrame_GetCode(frame);
++        frame->instr_ptr = _PyCode_CODE(code) + code->_co_firsttraceable;
+     }
+     CHECK(!_PyFrame_IsIncomplete(frame));
+     CHECK(f->f_back == NULL);
+@@ -523,7 +522,7 @@ THP_PyFrame_Clear(_PyInterpreterFrame *frame)
+         _PyFrame_GetGenerator(frame)->gi_frame_state == FRAME_CLEARED);
+     // GH-99729: Clearing this frame can expose the stack (via finalizers). It's
+     // crucial that this frame has been unlinked, and is no longer visible:
+-    CHECK(_PyThreadState_GET()->cframe->current_frame != frame);
++    CHECK(PyThreadState_GET()->current_frame != frame);
+     if (frame->frame_obj) {
+         PyFrameObject *f = frame->frame_obj;
+         frame->frame_obj = NULL;
+@@ -546,7 +545,7 @@ THP_PyFrame_Clear(_PyInterpreterFrame *frame)
+     #else
+     Py_DECREF(frame->f_func);
+     #endif
+-    Py_DECREF(frame->f_code);
++    Py_DECREF(_PyFrame_GetCode(frame));
+ }
+ 
+ // https://github.com/python/cpython/blob/fad48ea1816be3125ea51edcdfe2f999d6ade796/Objects/obmalloc.c#L635
+diff --git a/torch/csrc/dynamo/cpython_defs.h b/torch/csrc/dynamo/cpython_defs.h
+index b762f87d69d..d4432b8bb43 100644
+--- a/torch/csrc/dynamo/cpython_defs.h
++++ b/torch/csrc/dynamo/cpython_defs.h
+@@ -8,7 +8,9 @@
+ 
+ #if IS_PYTHON_3_11_PLUS
+ 
++#define Py_BUILD_CORE
+ #include <internal/pycore_frame.h>
++#undef Py_BUILD_CORE
+ 
+ int THP_PyFrame_FastToLocalsWithError(
+     _PyInterpreterFrame* frame,
+diff --git a/torch/csrc/dynamo/eval_frame.c b/torch/csrc/dynamo/eval_frame.c
+index b6a26f635ec..34eafba173b 100644
+--- a/torch/csrc/dynamo/eval_frame.c
++++ b/torch/csrc/dynamo/eval_frame.c
+@@ -18,7 +18,6 @@
+ // see https://bugs.python.org/issue35886
+ #if PY_VERSION_HEX >= 0x03080000
+ #define Py_BUILD_CORE
+-#include <internal/pycore_pystate.h>
+ 
+ // These headers were added in 3.11
+ #if IS_PYTHON_3_11_PLUS
+@@ -58,7 +57,7 @@ DECLARE_PYOBJ_ATTR(f_func)
+ DECLARE_PYOBJ_ATTR(f_globals)
+ DECLARE_PYOBJ_ATTR(f_builtins)
+ DECLARE_PYOBJ_ATTR(f_locals)
+-DECLARE_PYOBJ_ATTR(f_code)
++DECLARE_PYOBJ_ATTR(f_executable)
+ DECLARE_PYOBJ_ATTR(frame_obj)
+ 
+ #undef DECLARE_PYOBJ_ATTR
+@@ -76,7 +75,7 @@ static PyObject* THPPyInterpreterFrame_f_lasti(THPPyInterpreterFrame* self, PyOb
+ 
+ static PyObject* THPPyInterpreterFrame_f_lineno(THPPyInterpreterFrame* self, PyObject* _noargs) {
+   if (!self->frame->frame_obj) {
+-    return PyLong_FromLong(self->frame->f_code->co_firstlineno);
++    return PyLong_FromLong((_PyFrame_GetCode(self->frame))->co_firstlineno);
+   }
+   int lineno = PyFrame_GetLineNumber(self->frame->frame_obj);
+   if (lineno < 0) {
+@@ -102,7 +101,7 @@ static struct PyGetSetDef THPPyInterpreterFrame_properties[] = {
+     {"f_globals", (getter)THPPyInterpreterFrame_f_globals, NULL, NULL, NULL},
+     {"f_builtins", (getter)THPPyInterpreterFrame_f_builtins, NULL, NULL, NULL},
+     {"f_locals", (getter)THPPyInterpreterFrame_f_locals, NULL, NULL, NULL},
+-    {"f_code", (getter)THPPyInterpreterFrame_f_code, NULL, NULL, NULL},
++    {"f_executable", (getter)THPPyInterpreterFrame_f_executable, NULL, NULL, NULL},
+     {"frame_obj", (getter)THPPyInterpreterFrame_frame_obj, NULL, NULL, NULL},
+     {"previous", (getter)THPPyInterpreterFrame_previous, NULL, NULL, NULL},
+     {"f_lasti", (getter)THPPyInterpreterFrame_f_lasti, NULL, NULL, NULL},
+@@ -239,8 +238,8 @@ inline static void enable_eval_frame_default(PyThreadState* tstate) {
+ 
+ inline static const char* get_frame_name(THP_EVAL_API_FRAME_OBJECT* frame) {
+   // Returns the C string name of the current frame.
+-  DEBUG_CHECK(PyUnicode_Check(frame->f_code->co_name));
+-  return PyUnicode_AsUTF8(frame->f_code->co_name);
++  DEBUG_CHECK(PyUnicode_Check(_PyFrame_GetCode(frame)->co_name));
++  return PyUnicode_AsUTF8(_PyFrame_GetCode(frame)->co_name);
+ }
+ 
+ static inline PyObject* call_callback(
+@@ -327,7 +326,7 @@ inline static PyObject* eval_custom_code_impl(
+ 
+   PyObject** fastlocals_old = frame->localsplus;
+   PyObject** fastlocals_new = shadow->localsplus;
+-  Py_ssize_t n_old = frame->f_code->co_nlocalsplus;
++  Py_ssize_t n_old = _PyFrame_GetCode(frame)->co_nlocalsplus;
+   Py_ssize_t n_new = code->co_nlocalsplus;
+ 
+   // localsplus are XINCREF'd by default eval frame, so all values must be valid.
+@@ -341,8 +340,8 @@ inline static PyObject* eval_custom_code_impl(
+   // for 3.11+, if free_vars_copied is true, we do not need to
+   // run the first COPY_FREE_VARS since THP_PyFrame_FastToLocalsWithError
+   // already did the equivalent action.
+-  if (free_vars_copied && _Py_OPCODE(_PyCode_CODE(shadow->f_code)[0]) == COPY_FREE_VARS) {
+-    shadow->prev_instr = _PyCode_CODE(shadow->f_code);
++  if (free_vars_copied && _Py_OPCODE(_PyCode_CODE(_PyFrame_GetCode(shadow))[0]) == COPY_FREE_VARS) {
++    shadow->instr_ptr = _PyCode_CODE(_PyFrame_GetCode(shadow));
+   }
+ 
+ #else
+@@ -399,11 +398,12 @@ inline static PyObject* eval_custom_code_impl(
+ 
+   // copy args
+   // according to https://docs.python.org/3/library/inspect.html , `co_argcount` is the number of arguments (not including keyword only arguments, * or ** args). so we need to add `co_kwonlyargcount` and `co_flags` to get the total number of arguments.
+-  // !!(frame->f_code->co_flags & CO_VARARGS) is 1 if the function has *args, 0 otherwise
+-  // !!(frame->f_code->co_flags & CO_VARKEYWORDS) is 1 if the function has **kwargs, 0 otherwise
++  // !!(_PyFrame_GetCode(frame)->co_flags & CO_VARARGS) is 1 if the function has *args, 0 otherwise
++  // !!(_PyFrame_GetCode(frame)->co_flags & CO_VARKEYWORDS) is 1 if the function has **kwargs, 0 otherwise
+   // they convert bit flags to 0 or 1, and avoid branching.
+   // This is performance critical code, so we really care about performance.
+-  Py_ssize_t total_argcount_old = frame->f_code->co_argcount + frame->f_code->co_kwonlyargcount + !!(frame->f_code->co_flags & CO_VARARGS) + !!(frame->f_code->co_flags & CO_VARKEYWORDS);
++  PyCodeObject* f_code = _PyFrame_GetCode(frame);
++  Py_ssize_t total_argcount_old = f_code->co_argcount + f_code->co_kwonlyargcount + !!(f_code->co_flags & CO_VARARGS) + !!(f_code->co_flags & CO_VARKEYWORDS);
+ 
+   for (Py_ssize_t i = 0; i < total_argcount_old; i++) {
+     Py_XINCREF(fastlocals_old[i]);
+@@ -411,7 +411,7 @@ inline static PyObject* eval_custom_code_impl(
+   }
+ 
+   // copy free vars
+-  Py_ssize_t nfrees_old = PyCode_GetNFreevars(frame->f_code);
++  Py_ssize_t nfrees_old = PyCode_GetNFreevars(f_code);
+ 
+   for (Py_ssize_t i = 0; i < nfrees_old; i++) {
+     Py_XINCREF(fastlocals_old[n_old - 1 - i]);
+@@ -425,7 +425,7 @@ inline static PyObject* eval_custom_code_impl(
+   // this is straightforward in Python 3.11 and higher, as there are bit flags in `co_localspluskinds` to tell if a variable is a cell variable.
+   // in Python 3.10 and lower, essentially we are checking if a variable is a new local variable (because of the layout mentioned above, the first variable that is not cell variable is the first new local variable). the corresponding slot in `flocalsplus` is NULL for new local variables.
+ #if IS_PYTHON_3_11_PLUS
+-    if(!(_PyLocals_GetKind(frame->f_code->co_localspluskinds, i) & CO_FAST_CELL))
++    if(!(_PyLocals_GetKind(f_code->co_localspluskinds, i) & CO_FAST_CELL))
+     {
+       break;
+     }
+@@ -526,14 +526,14 @@ static PyObject* _custom_eval_frame(
+   DEBUG_TRACE(
+       "begin %s %s %i %i",
+       get_frame_name(frame),
+-      PyUnicode_AsUTF8(frame->f_code->co_filename),
+-      frame->f_code->co_firstlineno,
++      PyUnicode_AsUTF8(_PyFrame_GetCode(frame)->co_filename),
++      _PyFrame_GetCode(frame)->co_firstlineno,
+       _PyInterpreterFrame_LASTI(frame));
+ #else
+   DEBUG_TRACE(
+       "begin %s %s %i %i %i",
+       get_frame_name(frame),
+-      PyUnicode_AsUTF8(frame->f_code->co_filename),
++      PyUnicode_AsUTF8(_PyFrame_GetCode(frame)->co_filename),
+       frame->f_lineno,
+       frame->f_lasti,
+       frame->f_iblock);
+@@ -564,14 +564,14 @@ static PyObject* _custom_eval_frame(
+     return eval_frame_default(tstate, frame, throw_flag);
+   }
+ 
+-  ExtraState* extra = get_extra_state(frame->f_code);
++  ExtraState* extra = get_extra_state(_PyFrame_GetCode(frame));
+   if (extra == SKIP_CODE || (callback == Py_False && extra == NULL)) {
+     DEBUG_TRACE("skip %s", get_frame_name(frame));
+     return eval_frame_default(tstate, frame, throw_flag);
+   }
+ 
+   if (extra == NULL) {
+-    extra = init_and_set_extra_state(frame->f_code);
++    extra = init_and_set_extra_state(_PyFrame_GetCode(frame));
+   }
+ 
+   // TODO(jansel): investigate directly using the "fast" representation
+@@ -667,7 +667,7 @@ static PyObject* _custom_eval_frame(
+   } else {
+     DEBUG_TRACE("create skip %s", get_frame_name(frame));
+     Py_DECREF(result);
+-    set_extra_state(frame->f_code, SKIP_CODE);
++    set_extra_state(_PyFrame_GetCode(frame), SKIP_CODE);
+     // Re-enable custom behavior
+     eval_frame_callback_set(callback);
+     return eval_frame_default(tstate, frame, throw_flag);
+diff --git a/torch/csrc/dynamo/guards.cpp b/torch/csrc/dynamo/guards.cpp
+index d61ac4219a8..9b83ab200b7 100644
+--- a/torch/csrc/dynamo/guards.cpp
++++ b/torch/csrc/dynamo/guards.cpp
+@@ -233,12 +233,12 @@ static std::vector<std::optional<c10::SymInt>> pyListToVecOptInt(
+   std::vector<std::optional<c10::SymInt>> vec;
+   Py_ssize_t size = PyList_Size(pyList);
+   for (Py_ssize_t i = 0; i < size; i++) {
+-    PyObject* item = PyList_GetItem(pyList, i);
+-    auto handle = py::handle(item);
++    PyObject* item = PyList_GetItemRef(pyList, i);
++    auto obj = py::reinterpret_steal<py::object>(item);
+     if (item == Py_None) {
+       vec.emplace_back(std::nullopt);
+-    } else if (torch::is_symint(handle)) {
+-      vec.emplace_back(py::cast<c10::SymInt>(handle));
++    } else if (torch::is_symint(obj)) {
++      vec.emplace_back(py::cast<c10::SymInt>(obj));
+     } else {
+       int64_t value = PyLong_AsLongLong(item);
+       if (value == -1 && PyErr_Occurred()) {
+@@ -259,8 +259,9 @@ static std::vector<std::vector<std::optional<c10::SymInt>>> get_dynamic_dims(
+   if (dynamic_dims_py != Py_None) {
+     Py_ssize_t size = PyList_Size(dynamic_dims_py);
+     for (Py_ssize_t i = 0; i < size; i++) {
+-      PyObject* py_list = PyList_GetItem(dynamic_dims_py, i);
++      PyObject* py_list = PyList_GetItemRef(dynamic_dims_py, i);
+       std::vector<std::optional<c10::SymInt>> vec = pyListToVecOptInt(py_list);
++      Py_DECREF(py_list);
+       per_tensor_dynamic_dims.push_back(std::move(vec));
+     }
+   }
+@@ -411,13 +412,15 @@ PyObject* TensorGuards_check_verbose(
+   std::vector<std::string> tensor_check_names;
+   tensor_check_names.reserve(names_size);
+   for (auto i : c10::irange(names_size)) {
+-    PyObject* value = PyList_GetItem(tensor_check_names_py, i);
++    PyObject* value = PyList_GetItemRef(tensor_check_names_py, i);
+     if (!PyUnicode_Check(value)) {
++      Py_DECREF(value);
+       PyErr_SetString(
+           PyExc_TypeError, "tensor_check_names must only contain strings");
+       return nullptr;
+     }
+     tensor_check_names.emplace_back(PyUnicode_AsUTF8(value));
++    Py_DECREF(value);
+   }
+ 
+   LocalState state;
+@@ -1121,10 +1124,11 @@ class DEFAULT_DEVICE : public LeafGuard {
+     // leaked by design.
+     static PyObject* current_device_str =
+         PyUnicode_InternFromString("CURRENT_DEVICE");
+-    PyObject* device = PyDict_GetItem(
+-        _utils_device_dict.ptr(), current_device_str); // borrowed ref
++    PyObject* device;
++    PyDict_GetItemRef(_utils_device_dict.ptr(), current_device_str, &device);
+     if (device != _device.ptr()) {
+       int result = PyObject_RichCompareBool(device, _device.ptr(), Py_EQ);
++      Py_DECREF(device);
+       if (result == -1) {
+         PyErr_Clear();
+         return false;
+@@ -2236,14 +2240,17 @@ class DictSubclassGuardManager : public DictGuardManager {
+           return false;
+         }
+ 
+-        PyObject* value = PyDict_GetItem(obj, key); // borrowed ref
++        PyObject* value;
++        PyDict_GetItemRef(obj, key, &value); // new reference
+         std::unique_ptr<GuardManager>& value_manager = key_value_manager.second;
+         if (value_manager && !value_manager->check_nopybind(value)) {
+           Py_DECREF(key);
++          Py_XDECREF(value);
+           Py_DECREF(iterator);
+           return false;
+         }
+ 
++        Py_XDECREF(value);
+         index_pointer++;
+       }
+       dict_pointer++;
+@@ -2305,7 +2312,8 @@ class DictSubclassGuardManager : public DictGuardManager {
+           }
+         }
+ 
+-        PyObject* value = PyDict_GetItem(obj, key); // borrowed ref
++        PyObject* value;
++        PyDict_GetItemRef(obj, key, &value); // new reference
+         std::unique_ptr<GuardManager>& value_manager = key_value_manager.second;
+         if (value_manager) {
+           GuardDebugInfo debug_info =
+@@ -2313,11 +2321,14 @@ class DictSubclassGuardManager : public DictGuardManager {
+           num_guards_executed += debug_info.num_guards_executed;
+           if (!debug_info.result) {
+             Py_DECREF(key);
++            Py_XDECREF(value);
+             Py_DECREF(iterator);
+             return GuardDebugInfo(
+                 false, debug_info.verbose_code_parts, num_guards_executed);
+           }
+         }
++
++        Py_XDECREF(value);
+         index_pointer++;
+       }
+       Py_DECREF(key);
+@@ -2602,24 +2613,30 @@ class DictGetItemGuardAccessor : public GuardAccessor {
+   // NB: Intentional duplication between check_nopybind and
+   // check_verbose_nopybind.
+   bool check_nopybind(PyObject* obj) override { // borrowed ref
+-    PyObject* x = PyDict_GetItem(obj, _key); // borrowed ref
+-    if (x == nullptr) {
++    PyObject* x = nullptr;
++    int res = PyDict_GetItemRef(obj, _key, &x); // new reference
++    if (x == nullptr || res < 0) {
++      Py_XDECREF(x);
+       PyErr_Clear();
+       return false;
+     }
+     bool result = _guard_manager->check_nopybind(x);
++    Py_DECREF(x);
+     return result;
+   }
+ 
+   GuardDebugInfo check_verbose_nopybind(
+       PyObject* obj) override { // borrowed ref
+-    PyObject* x = PyDict_GetItem(obj, _key); // borrowed ref
+-    if (x == nullptr) {
++    PyObject* x = nullptr;
++    int res = PyDict_GetItemRef(obj, _key, &x); // new reference
++    if (x == nullptr || res < 0) {
++      Py_XDECREF(x);
+       PyErr_Clear();
+       return GuardDebugInfo(
+           false, std::string("KeyError on ") + get_source(), 0);
+     }
+     GuardDebugInfo result = _guard_manager->check_verbose_nopybind(x);
++    Py_DECREF(x);
+     return result;
+   }
+ 
+@@ -3077,40 +3094,54 @@ class GlobalWeakRefGuardAccessor : public GuardAccessor {
+   bool check_nopybind(PyObject* obj) override { // borrowed ref
+     // obj is globals dict because GlobalWeakRefGuardAccessor has to be a
+     // child of GlobalsGuardAccessor.
+-    PyObject* weakref = PyDict_GetItem(obj, _global_name); // borrowed ref
+-    if (weakref == nullptr) {
++    PyObject* weakref = nullptr;
++    int res = PyDict_GetItemRef(obj, _global_name, &weakref); // new reference
++    if (weakref == nullptr || res < 0) {
+       // The weakref is not in the globals dict.
++      Py_XDECREF(weakref);
+       PyErr_Clear();
+       return false;
+     }
+ 
+     if (!PyWeakref_Check(weakref)) {
++      Py_DECREF(weakref);
+       return false;
+     }
+ 
+-    PyObject* x = PyWeakref_GetObject(weakref); // borrowed ref
+-    return _guard_manager->check_nopybind(x);
++    PyObject* x;
++    PyWeakref_GetRef(weakref, &x);
++    bool result = _guard_manager->check_nopybind(x);
++    Py_DECREF(x);
++    Py_DECREF(weakref);
++    return result;
+   }
+ 
+   GuardDebugInfo check_verbose_nopybind(
+       PyObject* obj) override { // borrowed ref
+     // obj is globals dict because GlobalWeakRefGuardAccessor has to be a
+     // child of GlobalsGuardAccessor.
+-    PyObject* weakref = PyDict_GetItem(obj, _global_name); // borrowed ref
+-    if (weakref == nullptr) {
++    PyObject* weakref = nullptr;
++    int res = PyDict_GetItemRef(obj, _global_name, &weakref); // new reference
++    if (weakref == nullptr || res < 0) {
+       // The weakref is not in the globals dict.
++      Py_XDECREF(weakref);
+       PyErr_Clear();
+       return GuardDebugInfo(
+           false, std::string("KeyError on ") + get_source(), 0);
+     }
+ 
+     if (!PyWeakref_Check(weakref)) {
++      Py_DECREF(weakref);
+       return GuardDebugInfo(
+           false, std::string("Not a weakref ") + get_source(), 0);
+     }
+ 
+-    PyObject* x = PyWeakref_GetObject(weakref); // borrowed ref
+-    return _guard_manager->check_verbose_nopybind(x);
++    PyObject* x;
++    PyWeakref_GetRef(weakref, &x);
++    GuardDebugInfo result = _guard_manager->check_verbose_nopybind(x);
++    Py_DECREF(x);
++    Py_DECREF(weakref);
++    return result;
+   }
+ 
+   std::string repr() const override {
+diff --git a/torch/csrc/jit/python/pybind_utils.cpp b/torch/csrc/jit/python/pybind_utils.cpp
+index 23107d91d99..fcb55e641bc 100644
+--- a/torch/csrc/jit/python/pybind_utils.cpp
++++ b/torch/csrc/jit/python/pybind_utils.cpp
+@@ -1,3 +1,4 @@
++#include <pybind11/detail/internals.h>
+ #include <torch/csrc/jit/ir/graph_utils.h>
+ #include <torch/csrc/jit/python/module_python.h>
+ #include <torch/csrc/jit/python/pybind_utils.h>
+@@ -31,14 +32,14 @@ ToIValueAllowNumbersAsTensors::~ToIValueAllowNumbersAsTensors() {
+ // C++->Python. We need this because otherwise we may get the old Python object
+ // if C++ creates a new object at the memory location of the deleted object.
+ void clear_registered_instances(void* ptr) {
+-  auto& registered_instances =
+-      pybind11::detail::get_internals().registered_instances;
+-  auto range = registered_instances.equal_range(ptr);
+-  for (auto it = range.first; it != range.second; ++it) {
+-    auto vh = it->second->get_value_and_holder();
+-    vh.set_instance_registered(false);
+-  }
+-  registered_instances.erase(ptr);
++  pybind11::detail::with_instance_map(ptr, [&](pybind11::detail::instance_map &instances) {
++    auto range = instances.equal_range(ptr);
++    for (auto it = range.first; it != range.second; ++it) {
++      auto vh = it->second->get_value_and_holder();
++      vh.set_instance_registered(false);
++    }
++    instances.erase(ptr);
++  });
+ }
+ 
+ // WARNING: Precondition for this function is that, e.g., you have tested if a
+diff --git a/torch/csrc/utils/nested.cpp b/torch/csrc/utils/nested.cpp
+index 29ccf312851..be66215d34b 100644
+--- a/torch/csrc/utils/nested.cpp
++++ b/torch/csrc/utils/nested.cpp
+@@ -49,9 +49,10 @@ at::Tensor nested_tensor_ctor(
+   // Check whether we are dealing with lists of tensors or not
+   std::vector<at::Tensor> new_list(PyList_Size(data));
+   for (const auto i : c10::irange(PyList_Size(data))) {
+-    PyObject* elem = PyList_GetItem(data, i);
++    PyObject* elem = PyList_GetItemRef(data, i);
+     if (THPVariable_Check(elem)) {
+       new_list[i] = THPVariable_Unpack(PyList_GetItem(data, i)).detach();
++      Py_DECREF(elem);
+       TORCH_CHECK(
+           !new_list[i].is_nested(),
+           "We do not accept nested tensors as input to nested tensors");
+@@ -70,6 +71,7 @@ at::Tensor nested_tensor_ctor(
+       };
+       elem_r.args = elem_args.data();
+       new_list[i] = tensor_ctor(dispatch_key, scalar_type, elem_r);
++      Py_DECREF(elem);
+     }
+   }
+ 

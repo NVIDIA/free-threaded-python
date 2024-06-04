@@ -90,3 +90,27 @@ RUN python3 -m pip install more_itertools
 # Install Nsight Systems
 RUN wget -O nsight.deb https://developer.nvidia.com/downloads/assets/tools/secure/nsight-systems/2023_4_1_97/nsightsystems-linux-cli-public-2023.4.1.97-3355750.deb/ && \
     dpkg -i nsight.deb
+
+
+# Stage specifically for PyTorch
+FROM base as pytorch
+
+WORKDIR /opt
+# Install pytorch from source
+# Clone (this takes a very long time)
+RUN git clone --recursive -j"$(grep ^processor /proc/cpuinfo | wc -l)" --shallow-submodules https://github.com/pytorch/pytorch
+# Patch and install
+COPY patches/torch.patch /opt/torch.patch
+# Note: for some reason setup.py install (as well as pip install) don't work so we have to manually copy the package
+RUN cd pytorch && git checkout 3de78a1b48d2bfdf2dba89c983df518f2120fecf && \
+    git submodule update --init --recursive && \
+    git apply /opt/torch.patch && python3 -m pip install -r requirements.txt && \
+    cd third_party/pybind11 && git remote add colesbury https://github.com/colesbury/pybind11.git && \
+    git fetch colesbury && git checkout colesbury/v2.11.1-nogil && \
+    sed -i 's/Py_NOGIL/Py_GIL_DISABLED/g' include/pybind11/detail/internals.h && cd - && \
+    MAX_JOBS="$(grep ^processor /proc/cpuinfo | wc -l)" BUILD_TEST=0 python3 setup.py install && \
+    cp -r torch torchgen "$(python3 -c 'import sys; print(sys.path[-1])')"
+
+
+# Default stage - PyTorch is not built.
+FROM base as default
