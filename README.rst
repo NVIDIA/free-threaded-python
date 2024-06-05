@@ -5,11 +5,11 @@ Free-threaded Python
 What is that?
 -------------
 
-Using this repository, you can build and test a free-threaded Python environment.
+Using this repository, you can build and test a free-threaded Python environment containing NVIDIA Python libraries.
 
-Python Steering Commitee approved `PEP 703 <https://peps.python.org/pep-0703/>`_, which removes the `Global Interpreter Lock <https://wiki.python.org/moin/GlobalInterpreterLock>`_ from Python. First Python release that allows for a parallel execution is 3.13 (scheduled October 2024). However, for yet some time you won't be able to ``pip install`` your faviourite extensions and libraries.
+Python Steering Commitee approved `PEP 703 <https://peps.python.org/pep-0703/>`_, which removes the `Global Interpreter Lock <https://wiki.python.org/moin/GlobalInterpreterLock>`_ from Python. First Python release that allows for a parallel execution is 3.13 (scheduled October 2024). However, for yet some time you won't be able to ``pip install`` your favourite extensions and libraries.
 
-Provided Docker allows you to try the free-threaded environment yourself. We've included build routines to some popular extensions (`"My library is missing"`_). Should you encounter any bugs or problems, please let us know in the Issues.
+Provided Docker allows you to try the free-threaded environment yourself. We've included build routines to some popular NVIDIA extensions (`"My library is missing"`_). Should you encounter any bugs or problems, please let us know in the Issues.
 
 Please note: `This is an experimental software!`_
 
