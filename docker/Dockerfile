@@ -40,14 +40,9 @@ RUN git clone -b 3.13 --single-branch --recursive -j"$(grep ^processor /proc/cpu
     mkdir build && cd build && ../configure --disable-gil --with-pydebug && \
     make -j"$(grep ^processor /proc/cpuinfo | wc -l)" install
 
-# Install numpy from source
-# Clone and patch
-RUN git clone -b v1.26.4 --recursive -j"$(grep ^processor /proc/cpuinfo | wc -l)" https://github.com/numpy/numpy.git && cd numpy && \
-    sed -Ei 's/importlib.resources.read_text\((.+),\s*(.+),\s*encoding\s*=\s*(.+)\)/importlib.resources.files(\1)\.joinpath(\2).read_text(encoding=\3)/' vendored-meson/meson/mesonbuild/dependencies/cmake.py && \
-    sed -Ei 's/(\s+)"Cython>=[^"]+",/\1"Cython==3.0.5",\n\1"setuptools>=69.2",/' pyproject.toml && \
-    sed -i 's/#define PyArray_REFCOUNT(obj).*/#define PyArray_REFCOUNT Py_REFCNT/' numpy/core/include/numpy/ndarrayobject.h
-# Build
-RUN cd numpy && python3 -m pip install .
+RUN wget https://anaconda.org/scientific-python-nightly-wheels/numpy/2.1.0.dev0/download/numpy-2.1.0.dev0-cp313-cp313t-manylinux_2_17_x86_64.manylinux2014_x86_64.whl && \
+    WHL_NAME="$(echo numpy*.whl | sed 's/313t/313/')" && mv numpy*.whl "${WHL_NAME}" && \
+    python3 -m pip install numpy*.whl
 
 # Install nvImageCodec from source
 # Build dependencies
