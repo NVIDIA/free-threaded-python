@@ -52,8 +52,7 @@ RUN git clone --recursive --depth 1 -j"$(grep ^processor /proc/cpuinfo | wc -l)"
     sed -Ei 's/(, )?<=3.12//' python/setup.py.in && \
     sed -i 's/set\s*(PYTHON_VERSIONS\s*".*")/set(PYTHON_VERSIONS "3.13")/' cmake/Utils.cmake && \
     cd external/pybind11 && git remote add colesbury https://github.com/colesbury/pybind11.git && \
-    git fetch colesbury && git checkout colesbury/v2.11.1-nogil && \
-    sed -i 's/Py_NOGIL/Py_GIL_DISABLED/g' include/pybind11/detail/internals.h
+    git fetch colesbury && git checkout colesbury/pep703-support
 # Build and install
 RUN mkdir -p nvImageCodec/build && cd nvImageCodec/build && \
     WHL_OUTDIR=/tmp ../docker/build_helper.sh && \
@@ -67,7 +66,7 @@ RUN git clone https://github.com/CVCUDA/CV-CUDA.git && \
     cd CV-CUDA && sed -i 's/skip_precommit=0/skip_precommit=1/g' init_repo.sh && \
     ./init_repo.sh && cd 3rdparty/pybind11 && \
     git remote add colesbury https://github.com/colesbury/pybind11.git && git fetch colesbury && \
-    git checkout colesbury/v2.11.1-nogil && sed -i 's/Py_NOGIL/Py_GIL_DISABLED/g' include/pybind11/detail/internals.h
+    git checkout colesbury/pep703-support
 # Build and install
 RUN cd CV-CUDA && \
     CUDA_MAJOR=12 ci/build.sh release build -DCMAKE_CUDA_ARCHITECTURES="$CUDA_ARCHS" && \
@@ -101,8 +100,7 @@ RUN cd pytorch && git checkout 3de78a1b48d2bfdf2dba89c983df518f2120fecf && \
     git submodule update --init --recursive && \
     git apply /opt/torch.patch && python3 -m pip install -r requirements.txt && \
     cd third_party/pybind11 && git remote add colesbury https://github.com/colesbury/pybind11.git && \
-    git fetch colesbury && git checkout colesbury/v2.11.1-nogil && \
-    sed -i 's/Py_NOGIL/Py_GIL_DISABLED/g' include/pybind11/detail/internals.h && cd - && \
+    git fetch colesbury && git checkout colesbury/pep703-support && cd - && \
     MAX_JOBS="$(grep ^processor /proc/cpuinfo | wc -l)" BUILD_TEST=0 python3 setup.py install && \
     cp -r torch torchgen "$(python3 -c 'import sys; print(sys.path[-1])')"
 
