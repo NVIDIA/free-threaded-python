@@ -19,7 +19,9 @@
 # FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
-FROM nvcr.io/nvidia/cuda:12.5.0-devel-ubuntu22.04 as base
+ARG CUDA_VERSION=12.5.0
+
+FROM nvcr.io/nvidia/cuda:${CUDA_VERSION}-devel-ubuntu22.04 as base
 
 ARG DEBIAN_FRONTEND=noninteractive
 ENV PYTHON_GIL=0
