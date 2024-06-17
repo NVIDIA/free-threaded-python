@@ -85,7 +85,7 @@ RUN python3 -m pip install more_itertools
 RUN wget -O nsight.deb https://developer.nvidia.com/downloads/assets/tools/secure/nsight-systems/2023_4_1_97/nsightsystems-linux-cli-public-2023.4.1.97-3355750.deb/ && \
     dpkg -i nsight.deb
 
-
+ARG TEST_PYTORCH=0
 # Stage specifically for PyTorch
 FROM base as pytorch
 
@@ -101,7 +101,7 @@ RUN cd pytorch && git checkout 3de78a1b48d2bfdf2dba89c983df518f2120fecf && \
     git apply /opt/torch.patch && python3 -m pip install -r requirements.txt && \
     cd third_party/pybind11 && git remote add colesbury https://github.com/colesbury/pybind11.git && \
     git fetch colesbury && git checkout colesbury/pep703-support && cd - && \
-    MAX_JOBS="$(grep ^processor /proc/cpuinfo | wc -l)" BUILD_TEST=0 python3 setup.py install && \
+    MAX_JOBS="$(grep ^processor /proc/cpuinfo | wc -l)" BUILD_TEST=$TEST_PYTORCH python3 setup.py install && \
     cp -r torch torchgen "$(python3 -c 'import sys; print(sys.path[-1])')"
 
 
