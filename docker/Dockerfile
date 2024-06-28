@@ -97,8 +97,8 @@ RUN cd pytorch && git checkout 3de78a1b48d2bfdf2dba89c983df518f2120fecf && \
     git submodule update --init --recursive && \
     git apply /opt/torch.patch && python3 -m pip install -r requirements.txt && \
     cd third_party/pybind11 && git fetch --tags && git checkout v2.13.1 && cd - && \
-    MAX_JOBS="$(grep ^processor /proc/cpuinfo | wc -l)" BUILD_TEST=$TEST_PYTORCH python3 setup.py bdist_wheel install && \
-    cp -r torch torchgen "$(python3 -c 'import sys; print(sys.path[-1])')"
+    MAX_JOBS="$(grep ^processor /proc/cpuinfo | wc -l)" BUILD_TEST=$TEST_PYTORCH python3 setup.py bdist_wheel install
+RUN cd pytorch && python3 -m pip install ./dist/*.whl
 
 
 # Default stage - PyTorch is not built.
