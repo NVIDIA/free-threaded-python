@@ -40,9 +40,9 @@ RUN git clone -b 3.13 --single-branch --recursive -j"$(grep ^processor /proc/cpu
     mkdir build && cd build && ../configure --disable-gil --with-pydebug && \
     make -j"$(grep ^processor /proc/cpuinfo | wc -l)" install
 
-RUN wget https://anaconda.org/scientific-python-nightly-wheels/numpy/2.1.0.dev0/download/numpy-2.1.0.dev0-cp313-cp313t-manylinux_2_17_x86_64.manylinux2014_x86_64.whl && \
-    WHL_NAME="$(echo numpy*.whl | sed 's/313t/313/')" && mv numpy*.whl "${WHL_NAME}" && \
-    python3 -m pip install numpy*.whl
+# Install Numpy nightly build
+RUN python3 -m pip install \
+    https://anaconda.org/scientific-python-nightly-wheels/numpy/2.1.0.dev0/download/numpy-2.1.0.dev0-cp313-cp313t-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
 
 # Install nvImageCodec from source
 # Build dependencies
