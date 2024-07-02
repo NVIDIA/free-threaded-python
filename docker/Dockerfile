@@ -94,7 +94,11 @@ ARG TEST_PYTORCH=0
 FROM base as pytorch
 
 WORKDIR /opt
-ytorch from source
+
+# Install optree from source. Without it, we get FPEs at runtime
+RUN python3 -m pip install 'git+https://github.com/metaopt/optree.git#egg=optree'
+
+# Install pytorch from source
 # Clone (this takes a very long time)
 RUN git clone --recursive -j"$(grep ^processor /proc/cpuinfo | wc -l)" --shallow-submodules https://github.com/pytorch/pytorch
 # Patch and install
@@ -106,8 +110,6 @@ RUN cd pytorch && git checkout 3de78a1b48d2bfdf2dba89c983df518f2120fecf && \
     cd third_party/pybind11 && git fetch --tags && git checkout v2.13.1 && cd - && \
     MAX_JOBS="$(grep ^processor /proc/cpuinfo | wc -l)" BUILD_TEST=$TEST_PYTORCH python3 setup.py bdist_wheel install
 RUN cd pytorch && python3 -m pip install ./dist/*.whl
-
-
 
 # Default stage - PyTorch is not built.
 FROM base as default
