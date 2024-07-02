@@ -63,7 +63,7 @@ ARG CUDA_ARCHS
 
 # Install CV-CUDA from source
 # Clone and patch
-RUN git clone https://github.com/CVCUDA/CV-CUDA.git && \
+RUN git clone -b v0.8.0-beta https://github.com/CVCUDA/CV-CUDA.git && \
     cd CV-CUDA && sed -i 's/skip_precommit=0/skip_precommit=1/g' init_repo.sh && \
     ./init_repo.sh && cd 3rdparty/pybind11 && git submodule update --init . && git checkout v2.13.1
 # Build and install
