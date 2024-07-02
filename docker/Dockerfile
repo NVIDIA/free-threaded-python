@@ -43,8 +43,10 @@ RUN git clone -b 3.13 --single-branch --recursive -j"$(grep ^processor /proc/cpu
     make -j"$(grep ^processor /proc/cpuinfo | wc -l)" install
 
 # Install Numpy nightly build
-RUN python3 -m pip install \
-    https://anaconda.org/scientific-python-nightly-wheels/numpy/2.1.0.dev0/download/numpy-2.1.0.dev0-cp313-cp313t-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
+RUN python3 -m pip install -i https://pypi.anaconda.org/scientific-python-nightly-wheels/simple numpy
+
+# Install Cython nightly build
+RUN python3 -m pip install -i https://pypi.anaconda.org/scientific-python-nightly-wheels/simple cython
 
 # Install nvImageCodec from source
 # Build dependencies
