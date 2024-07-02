@@ -77,8 +77,13 @@ RUN git clone -b release-v3 https://github.com/NVIDIA/NVTX.git && cd NVTX/python
     sed -Ei 's;(include_dirs\s*=.+,)];\1 "/opt\/NVTX\/c\/include"];' setup.py && \
     python3 -m pip install .
 
-# Install Python dependencies
-RUN python3 -m pip install more_itertools
+# Install cuDNN FE
+RUN apt install -y cudnn && export CUDNN_INCLUDE_DIR=/usr/include && \
+    python3 -m pip install git+https://github.com/NVIDIA/cudnn-frontend.git
+
+# Install CUDA-python
+RUN export CUDA_HOME=/usr/local/cuda && \
+    python3 -m pip install git+https://github.com/NVIDIA/cuda-python
 
 # Install Nsight Systems
 RUN wget -O nsight.deb https://developer.nvidia.com/downloads/assets/tools/secure/nsight-systems/2023_4_1_97/nsightsystems-linux-cli-public-2023.4.1.97-3355750.deb/ && \
@@ -89,7 +94,7 @@ ARG TEST_PYTORCH=0
 FROM base as pytorch
 
 WORKDIR /opt
-# Install pytorch from source
+ytorch from source
 # Clone (this takes a very long time)
 RUN git clone --recursive -j"$(grep ^processor /proc/cpuinfo | wc -l)" --shallow-submodules https://github.com/pytorch/pytorch
 # Patch and install
@@ -101,6 +106,7 @@ RUN cd pytorch && git checkout 3de78a1b48d2bfdf2dba89c983df518f2120fecf && \
     cd third_party/pybind11 && git fetch --tags && git checkout v2.13.1 && cd - && \
     MAX_JOBS="$(grep ^processor /proc/cpuinfo | wc -l)" BUILD_TEST=$TEST_PYTORCH python3 setup.py bdist_wheel install
 RUN cd pytorch && python3 -m pip install ./dist/*.whl
+
 
 
 # Default stage - PyTorch is not built.
