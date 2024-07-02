@@ -85,6 +85,10 @@ RUN apt install -y cudnn && export CUDNN_INCLUDE_DIR=/usr/include && \
 RUN export CUDA_HOME=/usr/local/cuda && \
     python3 -m pip install git+https://github.com/NVIDIA/cuda-python
 
+# Install Warp
+RUN git clone https://github.com/NVIDIA/warp.git && cd warp && \
+    python3 build_lib.py && python3 -m pip install .
+
 # Install Nsight Systems
 RUN wget -O nsight.deb https://developer.nvidia.com/downloads/assets/tools/secure/nsight-systems/2023_4_1_97/nsightsystems-linux-cli-public-2023.4.1.97-3355750.deb/ && \
     dpkg -i nsight.deb
