@@ -39,7 +39,7 @@ WORKDIR /opt
 
 # Build and install the latest CPython
 RUN git clone -b 3.13 --single-branch --recursive -j"$(grep ^processor /proc/cpuinfo | wc -l)" https://github.com/python/cpython.git && cd cpython && \
-    mkdir build && cd build && ../configure --disable-gil --with-pydebug && \
+    mkdir build && cd build && ../configure --disable-gil && \
     make -j"$(grep ^processor /proc/cpuinfo | wc -l)" install
 
 # Install Numpy nightly build
