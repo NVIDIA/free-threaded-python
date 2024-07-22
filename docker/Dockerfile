@@ -108,14 +108,11 @@ RUN python3 -m pip install 'git+https://github.com/metaopt/optree.git#egg=optree
 
 # Install pytorch from source
 # Clone (this takes a very long time)
-RUN git clone --recursive -j"$(grep ^processor /proc/cpuinfo | wc -l)" --shallow-submodules https://github.com/pytorch/pytorch
+RUN git clone --recursive -j"$(grep ^processor /proc/cpuinfo | wc -l)" https://github.com/pytorch/pytorch
 # Patch and install
-COPY patches/torch.patch /opt/torch.patch
-
-RUN cd pytorch && git checkout 3de78a1b48d2bfdf2dba89c983df518f2120fecf && \
-    git submodule update --init --recursive && \
-    git apply /opt/torch.patch && python3 -m pip install -r requirements.txt && \
-    cd third_party/pybind11 && git fetch --tags && git checkout v2.13.1 && cd - && \
+RUN cd pytorch && git remote add alband https://github.com/albanD/pytorch.git && \
+    { git fetch alband || true; } && git switch update_313t && git -C third_party/fmt checkout 10.2.1 && \
+    python3 -m pip install -r requirements.txt && \
     MAX_JOBS="$(grep ^processor /proc/cpuinfo | wc -l)" BUILD_TEST=$TEST_PYTORCH python3 setup.py bdist_wheel install
 RUN cd pytorch && python3 -m pip install ./dist/*.whl
 
