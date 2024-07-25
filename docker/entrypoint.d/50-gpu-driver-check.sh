@@ -1,4 +1,4 @@
-# Copyright (c) 2017-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# Copyright (c) 2024, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 
 # Check if libcuda.so.1 -- the CUDA driver -- is present in the ld.so cache or in LD_LIBRARY_PATH
 _LIBCUDA_FROM_LD_CACHE=$(ldconfig -p | grep libcuda.so.1)

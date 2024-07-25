@@ -61,7 +61,7 @@ RUN mkdir -p nvImageCodec/build && cd nvImageCodec/build && \
     WHL_OUTDIR=/tmp ../docker/build_helper.sh && \
     apt install -y /tmp/*.deb && python3 -m pip install /tmp/*.whl
 
-ARG CUDA_ARCHS
+ARG CUDA_ARCHS='60;70;80;90'
 
 # Install CV-CUDA from source
 # Clone and patch
