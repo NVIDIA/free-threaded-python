@@ -97,6 +97,10 @@ RUN git clone https://github.com/NVIDIA/warp.git && cd warp && \
 RUN wget -O nsight.deb https://developer.nvidia.com/downloads/assets/tools/secure/nsight-systems/2023_4_1_97/nsightsystems-linux-cli-public-2023.4.1.97-3355750.deb/ && \
     dpkg -i nsight.deb
 
+RUN rm -r /opt/nvidia/entrypoint.d/*
+COPY entrypoint.d /opt/nvidia/entrypoint.d
+
+
 ARG TEST_PYTORCH=0
 # Stage specifically for PyTorch
 FROM base as pytorch
