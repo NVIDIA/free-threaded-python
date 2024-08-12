@@ -50,7 +50,7 @@ RUN python3 -m pip install -i https://pypi.anaconda.org/scientific-python-nightl
 RUN python3 -m pip install setuptools wheel clang==14 libclang==14.0.1
 # Clone and patch
 RUN git clone --recursive --depth 1 -j"$(grep ^processor /proc/cpuinfo | wc -l)" https://github.com/NVIDIA/nvImageCodec.git && cd nvImageCodec && \
-    sed -Ei 's/(, )?<=3.12//' python/setup.py.in && \
+    sed -Ei 's/(, )?<3.13//' python/setup.py.in && \
     sed -i 's/set\s*(PYTHON_VERSIONS\s*".*")/set(PYTHON_VERSIONS "3.13")/' cmake/Utils.cmake && \
     cd external/pybind11 && git fetch --tags && git checkout v2.13.1
 # Build and install
