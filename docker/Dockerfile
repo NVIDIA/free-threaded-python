@@ -42,8 +42,14 @@ RUN git clone -b 3.13 --single-branch --recursive -j"$(grep ^processor /proc/cpu
     mkdir build && cd build && ../configure --disable-gil && \
     make -j"$(grep ^processor /proc/cpuinfo | wc -l)" install
 
-# Numpy, Cython and Pillow nightly builds
-RUN python3 -m pip install -i https://pypi.anaconda.org/scientific-python-nightly-wheels/simple numpy cython pillow
+RUN update-alternatives --install /usr/bin/python python $(which python3.13) 0 && \
+    update-alternatives --force --install /usr/bin/pip pip $(which pip3.13) 0
+
+# Numpy provides 3.13t wheels
+RUN pip install numpy
+
+# Cython and Pillow nightly builds
+RUN python3 -m pip install -i https://pypi.anaconda.org/scientific-python-nightly-wheels/simple cython pillow
 
 # Install nvImageCodec from source
 # Build dependencies
