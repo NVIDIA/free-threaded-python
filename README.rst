@@ -29,11 +29,6 @@ How to try it?
 
    $ docker run -it --gpus all -v test:/test free-threaded-python python3 /test/simple.py
 
-#. If you want to build the container with PyTorch, specify the target (this takes some time)::
-
-   $ docker build -t free-threaded-python --target pytorch .
-
-
 This is an experimental software!
 ---------------------------------
 
