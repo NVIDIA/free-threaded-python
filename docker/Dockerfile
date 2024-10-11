@@ -21,7 +21,7 @@
 
 ARG CUDA_VERSION=12.5.0
 
-FROM nvcr.io/nvidia/cuda:${CUDA_VERSION}-devel-ubuntu22.04 as base
+FROM nvcr.io/nvidia/cuda:${CUDA_VERSION}-devel-ubuntu22.04
 
 ARG DEBIAN_FRONTEND=noninteractive
 ENV PYTHON_GIL=0
@@ -50,6 +50,14 @@ RUN pip install numpy
 
 # Cython and Pillow nightly builds
 RUN python3 -m pip install -i https://pypi.anaconda.org/scientific-python-nightly-wheels/simple cython pillow
+
+# PyTorch nightly build
+RUN SUFFIX="$(echo "${CUDA_VERSION//.}" | head -c 3)" && \
+    if [[ "$SUFFIX" =~ ^(118|121|124)$ ]]; then \
+        python3 -m pip install --pre torch --index-url https://download.pytorch.org/whl/nightly/cu"$SUFFIX"; \
+    else \
+        echo "No available PyTorch wheels for CUDA version $CUDA_VERSION"; \
+    fi
 
 # Install nvImageCodec from source
 # Build dependencies
@@ -102,27 +110,3 @@ RUN wget -O nsight.deb https://developer.nvidia.com/downloads/assets/tools/secur
 
 RUN rm -r /opt/nvidia/entrypoint.d/*
 COPY entrypoint.d /opt/nvidia/entrypoint.d
-
-
-ARG TEST_PYTORCH=0
-# Stage specifically for PyTorch
-FROM base as pytorch
-
-WORKDIR /opt
-
-# Install optree from source. Without it, we get FPEs at runtime
-RUN python3 -m pip install 'git+https://github.com/metaopt/optree.git#egg=optree'
-
-# Install pytorch from source
-# Clone (this takes a very long time)
-RUN git clone --recursive -j"$(grep ^processor /proc/cpuinfo | wc -l)" https://github.com/pytorch/pytorch
-# Patch and install
-RUN cd pytorch && git remote add alband https://github.com/albanD/pytorch.git && \
-    { git fetch alband || true; } && git switch update_313t && \
-    git submodule update --init --recursive && git -C third_party/fmt checkout 10.2.1 && \
-    python3 -m pip install -r requirements.txt && \
-    MAX_JOBS="$(grep ^processor /proc/cpuinfo | wc -l)" BUILD_TEST=$TEST_PYTORCH python3 setup.py bdist_wheel install
-RUN cd pytorch && python3 -m pip install ./dist/*.whl
-
-# Default stage - PyTorch is not built.
-FROM base as default
