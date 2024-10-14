@@ -53,7 +53,7 @@ RUN python3 -m pip install -i https://pypi.anaconda.org/scientific-python-nightl
 
 # PyTorch nightly build
 RUN SUFFIX="$(echo "${CUDA_VERSION//.}" | head -c 3)" && \
-    if [[ "$SUFFIX" =~ ^(118|121|124)$ ]]; then \
+    if [[ "$SUFFIX" =~ '^(118|121|124)$' ]]; then \
         python3 -m pip install --pre torch --index-url https://download.pytorch.org/whl/nightly/cu"$SUFFIX"; \
     else \
         echo "No available PyTorch wheels for CUDA version $CUDA_VERSION"; \
