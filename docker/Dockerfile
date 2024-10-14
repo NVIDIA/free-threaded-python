@@ -19,7 +19,7 @@
 # FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
-ARG CUDA_VERSION=12.5.0
+ARG CUDA_VERSION=12.4.0
 
 FROM nvcr.io/nvidia/cuda:${CUDA_VERSION}-devel-ubuntu22.04
 
@@ -52,11 +52,10 @@ RUN pip install numpy
 RUN python3 -m pip install -i https://pypi.anaconda.org/scientific-python-nightly-wheels/simple cython pillow
 
 # PyTorch nightly build
-RUN SUFFIX="$(echo "${CUDA_VERSION//.}" | head -c 3)" && \
-    if [[ "$SUFFIX" =~ '^(118|121|124)$' ]]; then \
-        python3 -m pip install --pre torch --index-url https://download.pytorch.org/whl/nightly/cu"$SUFFIX"; \
+RUN if [ "$(echo "${CUDA_VERSION//.}" | head -c 3)" != 124 ]; then \
+        echo "No available free-threaded PyTorch wheels for CUDA version $CUDA_VERSION"; \
     else \
-        echo "No available PyTorch wheels for CUDA version $CUDA_VERSION"; \
+        python3 -m pip install --pre torch --index-url https://download.pytorch.org/whl/nightly/cu124; \
     fi
 
 # Install nvImageCodec from source
