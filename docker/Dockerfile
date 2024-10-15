@@ -52,7 +52,7 @@ RUN pip install numpy
 RUN python3 -m pip install -i https://pypi.anaconda.org/scientific-python-nightly-wheels/simple cython pillow
 
 # PyTorch nightly build
-RUN if [ "$(echo "${CUDA_VERSION//.}" | head -c 3)" != 124 ]; then \
+RUN if [ "$(echo "$CUDA_VERSION" | tr -d . | head -c 3)" != 124 ]; then \
         echo "No available free-threaded PyTorch wheels for CUDA version $CUDA_VERSION"; \
     else \
         python3 -m pip install --pre torch --index-url https://download.pytorch.org/whl/nightly/cu124; \
