@@ -58,18 +58,13 @@ RUN if [ "$(echo "$CUDA_VERSION" | tr -d . | head -c 3)" != 124 ]; then \
         python3 -m pip install --pre torch --index-url https://download.pytorch.org/whl/nightly/cu124; \
     fi
 
-# Install nvImageCodec from source
-# Build dependencies
-RUN python3 -m pip install setuptools wheel clang==14 libclang==14.0.1
-# Clone and patch
-RUN git clone --recursive --depth 1 -j"$(grep ^processor /proc/cpuinfo | wc -l)" https://github.com/NVIDIA/nvImageCodec.git && cd nvImageCodec && \
-    sed -Ei 's/(, )?<3.13//' python/setup.py.in && \
-    sed -i 's/set\s*(PYTHON_VERSIONS\s*".*")/set(PYTHON_VERSIONS "3.13")/' cmake/Utils.cmake && \
-    cd external/pybind11 && git fetch --tags && git checkout v2.13.6
-# Build and install
-RUN mkdir -p nvImageCodec/build && cd nvImageCodec/build && \
-    WHL_OUTDIR=/tmp ../docker/build_helper.sh && \
-    apt install -y /tmp/*.deb && python3 -m pip install /tmp/*.whl
+# nvImageCodec provides 3.13t wheels
+RUN suffix="$(echo "$CUDA_VERSION" | tr -d . | head -c 2)" && \
+    if ! echo "$suffix" | grep -wq -e 11 -e 12; then \
+        echo "No available nvImageCodec wheels for CUDA version $CUDA_VERSION"; \
+    else \
+        python3 -m pip install nvidia-nvimgcodec-cu$suffix; \
+    fi
 
 ARG CUDA_ARCHS='60;70;80;90'
 
