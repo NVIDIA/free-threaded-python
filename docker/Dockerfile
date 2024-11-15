@@ -45,6 +45,9 @@ RUN git clone -b 3.13 --single-branch --recursive -j"$(grep ^processor /proc/cpu
 RUN update-alternatives --install /usr/bin/python python $(which python3.13) 0 && \
     update-alternatives --force --install /usr/bin/pip pip $(which pip3.13) 0
 
+# General build dependencies
+RUN pip install setuptools wheel clang==14 libclang==14.0.1
+
 # Numpy provides 3.13t wheels
 RUN pip install numpy
 
