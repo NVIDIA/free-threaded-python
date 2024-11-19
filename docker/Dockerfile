@@ -91,11 +91,14 @@ RUN git clone -b release-v3 https://github.com/NVIDIA/NVTX.git && cd NVTX/python
 RUN apt install -y cudnn && export CUDNN_INCLUDE_DIR=/usr/include && \
     python3 -m pip install git+https://github.com/NVIDIA/cudnn-frontend.git
 
-# Install CUDA-python
+# Install CUDA-Python
 RUN git clone -b "v$CUDA_VERSION" https://github.com/NVIDIA/cuda-python && cd cuda-python && \
     python3 -m pip install -r requirements.txt && export CUDA_HOME=/usr/local/cuda && \
     PARALLEL_LEVEL="$(grep ^processor /proc/cpuinfo | wc -l)" python3 setup.py bdist_wheel install && \
     python3 -m pip install dist/*.whl
+# Install cuda.core
+RUN cd cuda-python && git switch main && \
+    cd cuda_core && python3 -m pip install --no-build-isolation .
 
 # Install Warp
 RUN git clone https://github.com/NVIDIA/warp.git && cd warp && \
