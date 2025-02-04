@@ -52,10 +52,12 @@ RUN apt update && apt install -y \
 
 WORKDIR /opt
 
-# Build and install the latest CPython
-RUN git clone -b 3.13 --single-branch --recursive -j"$(grep ^processor /proc/cpuinfo | wc -l)" https://github.com/python/cpython.git && cd cpython && \
-    mkdir build && cd build && ../configure --disable-gil && \
-    make -j"$(grep ^processor /proc/cpuinfo | wc -l)" install
+# Build and install the CPython 3.13
+RUN git clone -b 3.13 --recursive -j"$(grep ^processor /proc/cpuinfo | wc -l)" https://github.com/python/cpython.git && cd cpython && \
+    mkdir build && cd build && \
+    CC=clang CXX=clang++ ../configure --prefix=/usr/ --disable-gil --enable-optimizations --with-lto --enable-shared && \
+    LDFLAGS="-fuse-ld=lld" make -j"$(grep ^processor /proc/cpuinfo | wc -l)" && \
+    make install
 
 RUN update-alternatives --install /usr/bin/python python $(which python3.13) 0 && \
     update-alternatives --force --install /usr/bin/pip pip $(which pip3.13) 0
@@ -71,17 +73,17 @@ RUN python3 -m pip install -i https://pypi.anaconda.org/scientific-python-nightl
 
 # PyTorch nightly build
 RUN if [ "$(echo "$CUDA_VERSION" | tr -d . | head -c 3)" != 124 ]; then \
-        echo "No available free-threaded PyTorch wheels for CUDA version $CUDA_VERSION"; \
+    echo "No available free-threaded PyTorch wheels for CUDA version $CUDA_VERSION"; \
     else \
-        python3 -m pip install --pre torch --index-url https://download.pytorch.org/whl/nightly/cu124; \
+    python3 -m pip install --pre torch --index-url https://download.pytorch.org/whl/nightly/cu124; \
     fi
 
 # nvImageCodec provides 3.13t wheels
 RUN suffix="$(echo "$CUDA_VERSION" | tr -d . | head -c 2)" && \
     if ! echo "$suffix" | grep -wq -e 11 -e 12; then \
-        echo "No available nvImageCodec wheels for CUDA version $CUDA_VERSION"; \
+    echo "No available nvImageCodec wheels for CUDA version $CUDA_VERSION"; \
     else \
-        python3 -m pip install nvidia-nvimgcodec-cu$suffix; \
+    python3 -m pip install nvidia-nvimgcodec-cu$suffix; \
     fi
 
 ARG CUDA_ARCHS='60;70;80;90'
