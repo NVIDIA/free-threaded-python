@@ -27,13 +27,28 @@ ARG DEBIAN_FRONTEND=noninteractive
 ENV PYTHON_GIL=0
 
 # Install build tools
-RUN apt update && \
-    apt install -y wget autoconf autogen git pkg-config libbz2-dev liblzma-dev libgdbm-dev     \
-                   libsqlite3-dev uuid-dev libreadline-dev libssl-dev zlib1g-dev               \
-                   libncurses5-dev libncursesw5-dev libffi-dev libdb-dev zip build-essential   \
-                   autoconf autogen unzip libboost-all-dev gdb vim tree ack cmake pre-commit   \
-                   shellcheck git-lfs patchelf gawk software-properties-common lsb-release     \
-                   libtiff-dev libzstd-dev libopencv-dev libclang-dev
+RUN apt update && apt install -y \
+    build-essential \
+    clang \
+    lld \
+    llvm \
+    zlib1g-dev \
+    binutils \
+    zlib1g-dev \
+    xz-utils \
+    tk-dev \
+    libssl-dev \
+    libbz2-dev \
+    libreadline-dev \
+    libncursesw5-dev \
+    libsqlite3-dev \
+    libxml2-dev \
+    libxmlsec1-dev \
+    libffi-dev \
+    liblzma-dev \
+    curl \
+    git \
+    cmake
 
 WORKDIR /opt
 
@@ -73,6 +88,7 @@ ARG CUDA_ARCHS='60;70;80;90'
 
 # Install CV-CUDA from source
 # Clone and patch
+RUN apt install -y lsb-release shellcheck git-lfs patchelf pre-commit
 RUN git clone -b v0.8.0-beta https://github.com/CVCUDA/CV-CUDA.git && \
     cd CV-CUDA && sed -i 's/skip_precommit=0/skip_precommit=1/g' init_repo.sh && \
     ./init_repo.sh && cd 3rdparty/pybind11 && git submodule update --init . && git checkout v2.13.6
