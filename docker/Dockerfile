@@ -48,7 +48,8 @@ RUN apt update && apt install -y \
     liblzma-dev \
     curl \
     git \
-    cmake
+    cmake \
+    wget
 
 WORKDIR /opt
 
