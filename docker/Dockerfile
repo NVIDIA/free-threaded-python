@@ -112,7 +112,7 @@ RUN apt install -y cudnn && export CUDNN_INCLUDE_DIR=/usr/include && \
 # Install CUDA-Python
 RUN git clone -b "v$CUDA_VERSION" https://github.com/NVIDIA/cuda-python && cd cuda-python && \
     python3 -m pip install -r requirements.txt && export CUDA_HOME=/usr/local/cuda && \
-    PARALLEL_LEVEL="$(grep ^processor /proc/cpuinfo | wc -l)" python3 setup.py bdist_wheel install && \
+    PARALLEL_LEVEL="$(grep ^processor /proc/cpuinfo | wc -l)" CC=gcc CXX=g++ python3 setup.py bdist_wheel install && \
     python3 -m pip install dist/*.whl
 # Install cuda.core
 RUN cd cuda-python && git switch main && \
