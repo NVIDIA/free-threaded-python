@@ -60,7 +60,11 @@ RUN git clone -b 3.13 --recursive -j"$(grep ^processor /proc/cpuinfo | wc -l)" h
     LDFLAGS="-fuse-ld=lld" make -j"$(grep ^processor /proc/cpuinfo | wc -l)" && \
     make install
 
+# Remove Python 3.10
+RUN apt remove --purge -y python3.10 && apt autoremove -y
+
 RUN update-alternatives --install /usr/bin/python python $(which python3.13) 0 && \
+    update-alternatives --install /usr/bin/python3 python3 $(which python3.13) 0 && \
     update-alternatives --force --install /usr/bin/pip pip $(which pip3.13) 0
 
 # General build dependencies
@@ -91,7 +95,7 @@ ARG CUDA_ARCHS='60;70;80;90'
 
 # Install CV-CUDA from source
 # Clone and patch
-RUN apt install -y lsb-release shellcheck git-lfs patchelf pre-commit
+RUN apt install -y git-lfs patchelf
 RUN git clone -b v0.8.0-beta https://github.com/CVCUDA/CV-CUDA.git && \
     cd CV-CUDA && sed -i 's/skip_precommit=0/skip_precommit=1/g' init_repo.sh && \
     ./init_repo.sh && cd 3rdparty/pybind11 && git submodule update --init . && git checkout v2.13.6
