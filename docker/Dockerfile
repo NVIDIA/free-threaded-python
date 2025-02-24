@@ -106,9 +106,8 @@ RUN cd CV-CUDA && \
 
 # Install NVTX from source
 RUN git clone -b release-v3 https://github.com/NVIDIA/NVTX.git && cd NVTX/python && \
-    sed -Ei 's/"Cython"/"Cython==3.0.5"/' pyproject.toml && \
     sed -Ei 's;(include_dirs\s*=.+,)];\1 "/opt\/NVTX\/c\/include"];' setup.py && \
-    python3 -m pip install .
+    python3 -m pip install --no-build-isolation .
 
 # Install cuDNN FE
 RUN apt install -y cudnn && export CUDNN_INCLUDE_DIR=/usr/include && \
