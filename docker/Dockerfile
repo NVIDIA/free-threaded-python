@@ -110,7 +110,8 @@ RUN git clone -b release-v3 https://github.com/NVIDIA/NVTX.git && cd NVTX/python
     python3 -m pip install --no-build-isolation .
 
 # Install cuDNN FE
-RUN apt install -y cudnn && export CUDNN_INCLUDE_DIR=/usr/include && \
+RUN apt install -y cudnn && \
+    CUDNN_INCLUDE_DIR=/usr/include CMAKE_POLICY_VERSION_MINIMUM=3.5 \
     python3 -m pip install git+https://github.com/NVIDIA/cudnn-frontend.git
 
 # Install CUDA-Python
