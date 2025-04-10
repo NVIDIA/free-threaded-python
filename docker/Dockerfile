@@ -68,13 +68,10 @@ RUN update-alternatives --install /usr/bin/python python $(which python3.13) 0 &
     update-alternatives --force --install /usr/bin/pip pip $(which pip3.13) 0
 
 # General build dependencies
-RUN pip install setuptools wheel clang==14 libclang==14.0.1
+RUN pip install setuptools wheel clang==14 libclang==14.0.1 'cython>=3.1.0b1'
 
-# Numpy provides 3.13t wheels
-RUN pip install numpy
-
-# Cython and Pillow nightly builds
-RUN python3 -m pip install -i https://pypi.anaconda.org/scientific-python-nightly-wheels/simple cython pillow
+RUN pip install numpy Pillow warp-lang && \
+    pip install --no-build-isolation nvtx
 
 # PyTorch nightly build
 RUN if [ "$(echo "$CUDA_VERSION" | tr -d . | head -c 3)" != 124 ]; then \
@@ -104,11 +101,6 @@ RUN cd CV-CUDA && \
     CUDA_MAJOR=12 ci/build.sh release build -DCMAKE_CUDA_ARCHITECTURES="$CUDA_ARCHS" && \
     python3 -m pip install build/python3.13/wheel
 
-# Install NVTX from source
-RUN git clone -b release-v3 https://github.com/NVIDIA/NVTX.git && cd NVTX/python && \
-    sed -Ei 's;(include_dirs\s*=.+,)];\1 "/opt\/NVTX\/c\/include"];' setup.py && \
-    python3 -m pip install --no-build-isolation .
-
 # Install cuDNN FE
 RUN apt install -y cudnn && \
     CUDNN_INCLUDE_DIR=/usr/include CMAKE_POLICY_VERSION_MINIMUM=3.5 \
@@ -122,10 +114,6 @@ RUN git clone -b "v$CUDA_VERSION" https://github.com/NVIDIA/cuda-python && cd cu
 # Install cuda.core
 RUN cd cuda-python && git switch main && \
     cd cuda_core && python3 -m pip install --no-build-isolation .
-
-# Install Warp
-RUN git clone https://github.com/NVIDIA/warp.git && cd warp && \
-    python3 build_lib.py && python3 -m pip install .
 
 # Install Nsight Systems
 RUN wget -O nsight.deb https://developer.nvidia.com/downloads/assets/tools/secure/nsight-systems/2023_4_1_97/nsightsystems-linux-cli-public-2023.4.1.97-3355750.deb/ && \
