@@ -71,6 +71,7 @@ RUN update-alternatives --install /usr/bin/python python $(which python3.13) 0 &
 RUN pip install setuptools wheel clang==14 libclang==14.0.1 'cython>=3.1.0b1'
 
 RUN pip install numpy Pillow warp-lang && \
+    # Disable build isolation to use system-installed Cython
     pip install --no-build-isolation nvtx
 
 # PyTorch nightly build
