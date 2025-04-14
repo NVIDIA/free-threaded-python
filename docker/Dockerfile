@@ -23,10 +23,15 @@ ARG CUDA_VERSION=12.4.0
 
 FROM nvcr.io/nvidia/cuda:${CUDA_VERSION}-devel-ubuntu22.04
 
-ARG DEBIAN_FRONTEND=noninteractive
-ENV PYTHON_GIL=0
+ARG PYTHON_VERSION=3.13
+ARG ENABLE_GIL=0
+ENV PYTHON_GIL=$ENABLE_GIL
+
+COPY --chmod=744 scripts/validate_args.sh /tmp/validate_args.sh
+RUN PYTHON_VERSION=$PYTHON_VERSION ENABLE_GIL=$ENABLE_GIL /tmp/validate_args.sh
 
 # Install build tools
+ARG DEBIAN_FRONTEND=noninteractive
 RUN apt update && apt install -y \
     build-essential \
     clang \
@@ -53,19 +58,20 @@ RUN apt update && apt install -y \
 
 WORKDIR /opt
 
-# Build and install the CPython 3.13
-RUN git clone -b 3.13 --recursive -j"$(grep ^processor /proc/cpuinfo | wc -l)" https://github.com/python/cpython.git && cd cpython && \
+# Remove system Python 3.10
+RUN apt remove --purge -y python3.10 && apt autoremove -y
+
+# Build and install the CPython from source
+RUN GIL_FLAG=$([ "$ENABLE_GIL" = "0" ] && echo "--disable-gil" || echo "") && \
+    git clone -b "$PYTHON_VERSION" --recursive -j"$(grep ^processor /proc/cpuinfo | wc -l)" https://github.com/python/cpython.git && cd cpython && \
     mkdir build && cd build && \
-    CC=clang CXX=clang++ ../configure --prefix=/usr/ --disable-gil --enable-optimizations --with-lto --enable-shared && \
+    CC=clang CXX=clang++ ../configure --prefix=/usr/ --enable-optimizations --with-lto --enable-shared $GIL_FLAG && \
     LDFLAGS="-fuse-ld=lld" make -j"$(grep ^processor /proc/cpuinfo | wc -l)" && \
     make install
 
-# Remove Python 3.10
-RUN apt remove --purge -y python3.10 && apt autoremove -y
-
-RUN update-alternatives --install /usr/bin/python python $(which python3.13) 0 && \
-    update-alternatives --install /usr/bin/python3 python3 $(which python3.13) 0 && \
-    update-alternatives --force --install /usr/bin/pip pip $(which pip3.13) 0
+RUN update-alternatives --install /usr/bin/python python $(which python$PYTHON_VERSION) 0 && \
+    update-alternatives --install /usr/local/bin/python3 python3 $(which python$PYTHON_VERSION) 0 && \
+    update-alternatives --force --install /usr/bin/pip pip $(which pip$PYTHON_VERSION) 0
 
 # General build dependencies
 RUN pip install setuptools wheel clang==14 libclang==14.0.1 'cython>=3.1.0b1'
@@ -100,7 +106,7 @@ RUN git clone -b v0.8.0-beta https://github.com/CVCUDA/CV-CUDA.git && \
 # Build and install
 RUN cd CV-CUDA && \
     CUDA_MAJOR=12 ci/build.sh release build -DCMAKE_CUDA_ARCHITECTURES="$CUDA_ARCHS" && \
-    python3 -m pip install build/python3.13/wheel
+    python3 -m pip install build/python$PYTHON_VERSION/wheel
 
 # Install cuDNN FE
 RUN apt install -y cudnn && \
